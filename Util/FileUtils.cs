@@ -4,12 +4,17 @@ using ProcessWindowSaver.Model;
 namespace ProcessWindowSaver.Util;
 
 public static class FileUtils {
-    private const string PROCESS_INFO_FILE_PATH = "processInfo.txt";
+    private const string PROCESS_INFO_FILE_PATH = "processInfo_{datetime}.txt";
     private const string FIELDS_SPLITTER = ":::";
 
-    // 保存到CSV文件
+    // 保存到txt文件
     public static void SaveToFile(List<ProcessInfo> processInfos) {
-        using (StreamWriter writer = new StreamWriter(PROCESS_INFO_FILE_PATH, false, Encoding.UTF8)) {
+        if (processInfos.Count == 0) {
+            Console.WriteLine("没有符合条件的进程信息，无法保存到txt文件！");
+            return;
+        }
+        string filepath = PROCESS_INFO_FILE_PATH.Replace("{datetime}", DateTime.Now.ToString("yyyyMMdd-HHmmss"));
+        using (StreamWriter writer = new StreamWriter(filepath, false, Encoding.UTF8)) {
             foreach (var info in processInfos) {
                 writer.WriteLine(
                     $"{info.ProcessName}{FIELDS_SPLITTER}" +
@@ -23,14 +28,22 @@ public static class FileUtils {
             }
         }
 
-        Console.WriteLine($"信息已保存到CSV文件: {Path.GetFullPath(PROCESS_INFO_FILE_PATH)}");
+        Console.WriteLine($"信息已保存到txt文件: {Path.GetFullPath(filepath)}");
+    }
+
+    // 列出所有的进程信息文件路径
+    public static List<string> ListProcessInfoFiles() {
+        string pattern = PROCESS_INFO_FILE_PATH.Replace("_{datetime}", "*");
+        string currentDirectory = Directory.GetCurrentDirectory();
+        string[] files = Directory.GetFiles(currentDirectory, pattern);
+        return files.OrderByDescending(f => File.GetLastWriteTime(f)).ToList();
     }
 
     // 读取文件
-    public static List<ProcessInfo> ReadFromFile() {
+    public static List<ProcessInfo> ReadFromFile(string filepath) {
         List<ProcessInfo> processInfoList = new List<ProcessInfo>();
 
-        using (StreamReader reader = new StreamReader(PROCESS_INFO_FILE_PATH, Encoding.UTF8)) {
+        using (StreamReader reader = new StreamReader(filepath, Encoding.UTF8)) {
             while (reader.Peek() != -1) {
                 string? line = reader.ReadLine();
                 if (string.IsNullOrWhiteSpace(line)) {

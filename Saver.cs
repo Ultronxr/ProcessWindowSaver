@@ -36,8 +36,7 @@ public class Saver {
     }
 
     public static void Save(string? processNameFilter = null) {
-        Console.WriteLine("应用程序信息导出工具");
-        Console.WriteLine("=====================");
+        Console.WriteLine("==========应用程序信息导出工具==========");
         string[]? processNameFilterArr = string.IsNullOrWhiteSpace(processNameFilter)
             ? null
             : processNameFilter.Trim().ToLower().Split(',');
@@ -62,7 +61,7 @@ public class Saver {
                 // 检查进程是否有主窗口且可见
                 if (process.MainWindowHandle != IntPtr.Zero && IsWindowVisible(process.MainWindowHandle)) {
                     string processName = process.ProcessName.Trim().ToLower();
-                    Console.WriteLine(processName);
+                    Console.WriteLine($"遍历 {processName}");
                     // processNameFilterArr != null 时表示启用了 filter ，此时需要判断进程名称是否在过滤白名单中
                     if (processNameFilterArr != null && !processNameFilterArr.Any(p => processName.Contains(p))) {
                         continue;
@@ -89,7 +88,7 @@ public class Saver {
                         };
 
                         processInfos.Add(info);
-                        Console.WriteLine($"已获取: {process.ProcessName}");
+                        Console.WriteLine($"已保存 {process.ProcessName}");
                     }
                 }
             } catch (Exception ex) {

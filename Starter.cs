@@ -21,11 +21,30 @@ public class Starter {
     const int SW_RESTORE = 9;
 
     public static void Start() {
-        Console.WriteLine("应用程序启动器");
-        Console.WriteLine("================");
-        List<ProcessInfo> processInfos = FileUtils.ReadFromFile();
-        foreach (ProcessInfo processInfo in processInfos) {
-            StartProcess(processInfo);
+        Console.WriteLine("==========应用程序启动器==========");
+        
+        List<string> filepathList = FileUtils.ListProcessInfoFiles();
+        if (filepathList.Count == 0) {
+            Console.WriteLine("同路径下未找到任何 processInfo.txt 文件！");
+        } else if (filepathList.Count == 1) {
+            List<ProcessInfo> processInfos = FileUtils.ReadFromFile(filepathList[0]);
+            foreach (ProcessInfo processInfo in processInfos) {
+                StartProcess(processInfo);
+            }
+        } else {
+            Console.WriteLine("同路径下发现多个 processInfo.txt 文件，请指定一个文件编号：");
+            for(int i = 1; i <= filepathList.Count; i++) {
+                Console.WriteLine($"[{i}] {filepathList[i - 1]}");
+            }
+            string? line = Console.ReadLine()?.Trim();
+            if (int.TryParse(line, out int lineInt) && lineInt > 0 && lineInt <= filepathList.Count) {
+                List<ProcessInfo> processInfos = FileUtils.ReadFromFile(filepathList[lineInt]);
+                foreach (ProcessInfo processInfo in processInfos) {
+                    StartProcess(processInfo);
+                }
+            } else {
+                Console.WriteLine("错误的文件编号！");
+            }
         }
         
         Console.WriteLine("\n按任意键退出...");

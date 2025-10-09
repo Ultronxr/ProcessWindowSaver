@@ -18,7 +18,7 @@ switch (line) {
         break;
     }
     case "2": {
-        Console.WriteLine("请输入进程名称进行筛选（白名单，不区分大小写，多个进程名称之间使用英文逗号分隔）");
+        Console.WriteLine("请输入进程名称进行筛选（白名单，不区分大小写，多个进程名称之间使用英文逗号分隔）：");
         line = Console.ReadLine()?.Trim();
         Saver.Save(line);
         break;
