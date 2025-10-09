@@ -26,11 +26,13 @@ public class Starter {
         List<string> filepathList = FileUtils.ListProcessInfoFiles();
         if (filepathList.Count == 0) {
             Console.WriteLine("同路径下未找到任何 processInfo.txt 文件！");
-        } else if (filepathList.Count == 1) {
-            List<ProcessInfo> processInfos = FileUtils.ReadFromFile(filepathList[0]);
-            foreach (ProcessInfo processInfo in processInfos) {
-                StartProcess(processInfo);
+            Console.WriteLine("请指定一个文件路径（可以把文件拖入该窗口），或回车退出：");
+            string? line = Console.ReadLine()?.Trim();
+            if (!string.IsNullOrWhiteSpace(line)) {
+                ReadProcessInfoAndStart(line);
             }
+        } else if (filepathList.Count == 1) {
+            ReadProcessInfoAndStart(filepathList[0]);
         } else {
             Console.WriteLine("同路径下发现多个 processInfo.txt 文件，请指定一个文件编号：");
             for(int i = 1; i <= filepathList.Count; i++) {
@@ -38,10 +40,7 @@ public class Starter {
             }
             string? line = Console.ReadLine()?.Trim();
             if (int.TryParse(line, out int lineInt) && lineInt > 0 && lineInt <= filepathList.Count) {
-                List<ProcessInfo> processInfos = FileUtils.ReadFromFile(filepathList[lineInt]);
-                foreach (ProcessInfo processInfo in processInfos) {
-                    StartProcess(processInfo);
-                }
+                ReadProcessInfoAndStart(filepathList[lineInt]);
             } else {
                 Console.WriteLine("错误的文件编号！");
             }
@@ -49,6 +48,17 @@ public class Starter {
         
         Console.WriteLine("\n按任意键退出...");
         Console.ReadKey();
+    }
+
+    private static void ReadProcessInfoAndStart(string filepath) {
+        try {
+            List<ProcessInfo> processInfos = FileUtils.ReadFromFile(filepath);
+            foreach (ProcessInfo processInfo in processInfos) {
+                StartProcess(processInfo);
+            }
+        } catch (Exception ex) {
+            Console.WriteLine(ex.Message);
+        }
     }
 
     private static void StartProcess(ProcessInfo processInfo) {

@@ -41,8 +41,14 @@ public static class FileUtils {
 
     // 读取文件
     public static List<ProcessInfo> ReadFromFile(string filepath) {
-        List<ProcessInfo> processInfoList = new List<ProcessInfo>();
+        if (!File.Exists(filepath)) {
+            throw new FileNotFoundException("文件不存在！");
+        }
+        if (!filepath.EndsWith(".txt", StringComparison.OrdinalIgnoreCase)) {
+            throw new ArgumentException("文件格式不正确，仅支持txt文件！");
+        }
 
+        List<ProcessInfo> processInfoList = new List<ProcessInfo>();
         using (StreamReader reader = new StreamReader(filepath, Encoding.UTF8)) {
             while (reader.Peek() != -1) {
                 string? line = reader.ReadLine();
