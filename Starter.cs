@@ -40,7 +40,7 @@ public class Starter {
             }
             string? line = Console.ReadLine()?.Trim();
             if (int.TryParse(line, out int lineInt) && lineInt > 0 && lineInt <= filepathList.Count) {
-                ReadProcessInfoAndStart(filepathList[lineInt]);
+                ReadProcessInfoAndStart(filepathList[lineInt - 1]);
             } else {
                 Console.WriteLine("错误的文件编号！");
             }
