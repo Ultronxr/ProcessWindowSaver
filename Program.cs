@@ -1,4 +1,7 @@
-﻿using ProcessWindowSaver;
+﻿using System.Runtime.Versioning;
+using ProcessWindowSaver;
+
+[assembly: SupportedOSPlatform("windows")]
 
 string[] commandList = { "0", "1", "2", "3", "4" };
 Console.WriteLine("请选择功能：\n[0] 退出\n[1] 保存窗口状态\n[2] 保存指定进程的窗口状态\n[3] 保存 PotPlayer 窗口状态\n[4] 恢复窗口状态");
@@ -31,4 +34,4 @@ switch (line) {
         Starter.Start();
         break;
     }
-} 
+}

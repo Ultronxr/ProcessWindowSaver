@@ -1,80 +1,68 @@
-using System.Text;
+﻿using System.Text.Json;
 using ProcessWindowSaver.Model;
 
 namespace ProcessWindowSaver.Util;
 
+/// <summary>
+/// 负责进程窗口快照的持久化读写。
+/// 目前统一使用 JSON 文件，不再维护旧的 TXT 存储格式。
+/// </summary>
 public static class FileUtils {
-    private const string PROCESS_INFO_FILE_PATH = "processInfo_{datetime}.txt";
-    private const string FIELDS_SPLITTER = ":::";
+    /// <summary>
+    /// 保存文件名模板。
+    /// 最终会生成形如 processInfo_20260307-013500.json 的文件。
+    /// </summary>
+    private const string ProcessInfoFilePath = "processInfo_{datetime}.json";
 
-    // 保存到txt文件
+    /// <summary>
+    /// JSON 序列化配置。
+    /// 使用缩进格式，方便人工查看和调试。
+    /// </summary>
+    private static readonly JsonSerializerOptions JsonOptions = new() {
+        WriteIndented = true,
+    };
+
+    /// <summary>
+    /// 将进程快照集合保存为 JSON 文件。
+    /// </summary>
     public static void SaveToFile(List<ProcessInfo> processInfos) {
         if (processInfos.Count == 0) {
-            Console.WriteLine("没有符合条件的进程信息，无法保存到txt文件！");
+            Console.WriteLine("没有符合条件的进程信息，未生成保存文件。");
             return;
         }
-        string filepath = PROCESS_INFO_FILE_PATH.Replace("{datetime}", DateTime.Now.ToString("yyyyMMdd-HHmmss"));
-        using (StreamWriter writer = new StreamWriter(filepath, false, Encoding.UTF8)) {
-            foreach (var info in processInfos) {
-                writer.WriteLine(
-                    $"{info.ProcessName}{FIELDS_SPLITTER}" +
-                    $"{info.FilePath}{FIELDS_SPLITTER}" +
-                    $"{info.CommandLine}{FIELDS_SPLITTER}" +
-                    $"{info.X}{FIELDS_SPLITTER}" +
-                    $"{info.Y}{FIELDS_SPLITTER}" +
-                    $"{info.Width}{FIELDS_SPLITTER}" +
-                    $"{info.Height}{FIELDS_SPLITTER}" +
-                    $"{info.WindowTitle}");
-            }
-        }
 
-        Console.WriteLine($"信息已保存到txt文件: {Path.GetFullPath(filepath)}");
+        string filepath = ProcessInfoFilePath.Replace("{datetime}", DateTime.Now.ToString("yyyyMMdd-HHmmss"));
+        string json = JsonSerializer.Serialize(processInfos, JsonOptions);
+        File.WriteAllText(filepath, json);
+
+        Console.WriteLine($"信息已保存到: {Path.GetFullPath(filepath)}");
     }
 
-    // 列出所有的进程信息文件路径
+    /// <summary>
+    /// 枚举当前目录下所有快照文件，并按最后修改时间倒序返回。
+    /// 这样恢复时默认更容易命中最新一次保存结果。
+    /// </summary>
     public static List<string> ListProcessInfoFiles() {
-        string pattern = PROCESS_INFO_FILE_PATH.Replace("_{datetime}", "*");
+        string pattern = ProcessInfoFilePath.Replace("_{datetime}", "*");
         string currentDirectory = Directory.GetCurrentDirectory();
         string[] files = Directory.GetFiles(currentDirectory, pattern);
-        return files.OrderByDescending(f => File.GetLastWriteTime(f)).ToList();
+        return files.OrderByDescending(File.GetLastWriteTime).ToList();
     }
 
-    // 读取文件
+    /// <summary>
+    /// 从 JSON 文件读取进程快照集合。
+    /// </summary>
     public static List<ProcessInfo> ReadFromFile(string filepath) {
         if (!File.Exists(filepath)) {
             throw new FileNotFoundException("文件不存在！");
         }
-        if (!filepath.EndsWith(".txt", StringComparison.OrdinalIgnoreCase)) {
-            throw new ArgumentException("文件格式不正确，仅支持txt文件！");
+
+        if (!filepath.EndsWith(".json", StringComparison.OrdinalIgnoreCase)) {
+            throw new ArgumentException("文件格式不正确，仅支持 json 文件！");
         }
 
-        List<ProcessInfo> processInfoList = new List<ProcessInfo>();
-        using (StreamReader reader = new StreamReader(filepath, Encoding.UTF8)) {
-            while (reader.Peek() != -1) {
-                string? line = reader.ReadLine();
-                if (string.IsNullOrWhiteSpace(line)) {
-                    continue;
-                }
-
-                string[] fields = line.Split(FIELDS_SPLITTER);
-                if (fields.Length != 8 || (fields[0] == "进程名称" && fields[1] == "文件路径")) {
-                    continue;
-                }
-
-                ProcessInfo info = new ProcessInfo() {
-                    ProcessName = fields[0],
-                    FilePath = fields[1],
-                    CommandLine = fields[2],
-                    X = int.Parse(fields[3]),
-                    Y = int.Parse(fields[4]),
-                    Width = int.Parse(fields[5]),
-                    Height = int.Parse(fields[6]),
-                    WindowTitle = fields[7],
-                };
-                processInfoList.Add(info);
-            }
-        }
-
-        return processInfoList;
+        string json = File.ReadAllText(filepath);
+        List<ProcessInfo>? processInfoList = JsonSerializer.Deserialize<List<ProcessInfo>>(json, JsonOptions);
+        return processInfoList ?? new List<ProcessInfo>();
     }
 }
