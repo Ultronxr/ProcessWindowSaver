@@ -9,17 +9,33 @@ using ProcessWindowSaver.Util;
 
 namespace ProcessWindowSaver;
 
+/// <summary>
+/// 扫描当前可见窗口并生成可恢复快照。
+/// 对普通程序保存原始命令行即可恢复；对 PotPlayer 会额外识别当前播放媒体路径。
+/// </summary>
 [SupportedOSPlatform("windows")]
 public class Saver {
+    /// <summary>
+    /// 读取窗口矩形区域，用于获取窗口位置和大小。
+    /// </summary>
     [DllImport("user32.dll")]
     private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
 
+    /// <summary>
+    /// 判断窗口当前是否可见。
+    /// </summary>
     [DllImport("user32.dll")]
     private static extern bool IsWindowVisible(IntPtr hWnd);
 
+    /// <summary>
+    /// 通过 Win32 API 查询进程可执行文件完整路径。
+    /// </summary>
     [DllImport("kernel32.dll")]
     private static extern bool QueryFullProcessImageName(IntPtr hProcess, int dwFlags, StringBuilder lpExeName, out int size);
 
+    /// <summary>
+    /// Win32 窗口矩形结构，用于保存窗口左上角坐标以及宽高。
+    /// </summary>
     [StructLayout(LayoutKind.Sequential)]
     public struct RECT {
         public int Left;
@@ -31,6 +47,10 @@ public class Saver {
         public int Height => Bottom - Top;
     }
 
+    /// <summary>
+    /// 从 PotPlayer 的播放状态文件中提取出的简化会话信息。
+    /// 其中最关键的是当前播放文件完整路径和状态文件的更新时间。
+    /// </summary>
     private sealed class PotPlayerPlaylistState {
         public string PlaylistFilePath { get; init; } = string.Empty;
         public string CurrentMediaPath { get; init; } = string.Empty;
@@ -38,15 +58,24 @@ public class Saver {
         public bool IsPreferredSessionFile { get; init; }
     }
 
+    /// <summary>
+    /// 识别为播放列表的扩展名集合，用于从命令行中展开播放列表内容。
+    /// </summary>
     private static readonly HashSet<string> PlaylistExtensions = new(StringComparer.OrdinalIgnoreCase) {
         ".m3u", ".m3u8", ".pls", ".dpl", ".asx", ".wax", ".wvx", ".wpl", ".cue"
     };
 
+    /// <summary>
+    /// 识别为媒体文件的扩展名集合，用于过滤命令行候选和同目录扫描候选。
+    /// </summary>
     private static readonly HashSet<string> MediaExtensions = new(StringComparer.OrdinalIgnoreCase) {
         ".mp4", ".mkv", ".avi", ".mov", ".wmv", ".flv", ".webm", ".m4v", ".ts", ".m2ts", ".mpg", ".mpeg",
         ".mp3", ".flac", ".aac", ".wav", ".ogg", ".m4a", ".ape", ".wma"
     };
 
+    /// <summary>
+    /// PotPlayer 常见窗口标题后缀，用于剥离播放器名称只保留媒体标题。
+    /// </summary>
     private static readonly string[] PotPlayerSuffixes = {
         " - PotPlayer",
         " - PotPlayerMini",
@@ -55,11 +84,27 @@ public class Saver {
         " - Daum PotPlayer"
     };
 
+    /// <summary>
+    /// 去掉标题前部的短元信息，例如 [暂停]、(预览) 等内容。
+    /// </summary>
     private static readonly Regex LeadingBracketMetadataRegex = new(@"^\s*[\[(][^\])]{1,40}[\])]\s*", RegexOptions.Compiled);
+    /// <summary>
+    /// 去掉标题尾部的短元信息。
+    /// </summary>
     private static readonly Regex TrailingBracketMetadataRegex = new(@"\s*[\[(][^\])]{1,40}[\])]\s*$", RegexOptions.Compiled);
+    /// <summary>
+    /// 去掉标题中常见的分辨率、编码和帧率等噪声。
+    /// </summary>
     private static readonly Regex ResolutionNoiseRegex = new(@"\s+(2160p|1080p|720p|540p|480p|x265|x264|hevc|av1|hdr10?\+?|\d{2,3}fps)\b.*$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    /// <summary>
+    /// 去掉标题中可能出现的播放时间文本。
+    /// </summary>
     private static readonly Regex TimeNoiseRegex = new(@"\s+\d{1,2}:\d{2}(?::\d{2})?(\s*/\s*\d{1,2}:\d{2}(?::\d{2})?)?\s*$", RegexOptions.Compiled);
 
+    /// <summary>
+    /// 保存入口。
+    /// 可选地按进程名白名单过滤需要导出的窗口。
+    /// </summary>
     public static void Save(string? processNameFilter = null) {
         Console.WriteLine("==========应用程序信息导出工具==========");
         string[]? processNameFilterArr = string.IsNullOrWhiteSpace(processNameFilter)
@@ -76,6 +121,9 @@ public class Saver {
         Console.ReadKey();
     }
 
+    /// <summary>
+    /// 枚举当前所有可见主窗口，并提取可恢复的进程信息。
+    /// </summary>
     private static List<ProcessInfo> GetVisibleProcessesInfo(string[]? processNameFilterArr) {
         List<ProcessInfo> processInfos = new();
 
@@ -118,6 +166,10 @@ public class Saver {
         return processInfos;
     }
 
+    /// <summary>
+    /// 为特定应用补充恢复所需的额外状态。
+    /// 目前主要对 PotPlayer 增强当前播放媒体识别。
+    /// </summary>
     private static void EnrichResumeState(ProcessInfo info) {
         if (!IsPotPlayerProcess(info.ProcessName)) {
             return;
@@ -135,10 +187,17 @@ public class Saver {
         Console.WriteLine($"PotPlayer 识别详情: {details}");
     }
 
+    /// <summary>
+    /// 判断当前进程是否为 PotPlayer 变体。
+    /// </summary>
     private static bool IsPotPlayerProcess(string processName) {
         return processName.Contains("potplayer", StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// 识别 PotPlayer 当前播放媒体的完整路径。
+    /// 识别顺序为：状态文件 -> 命令行/标题直接匹配 -> 同目录兜底匹配。
+    /// </summary>
     private static bool TryResolvePotPlayerCurrentMedia(ProcessInfo info, out string? currentMediaPath, out string details) {
         currentMediaPath = null;
 
@@ -181,6 +240,10 @@ public class Saver {
         return false;
     }
 
+    /// <summary>
+    /// 从 PotPlayer 的 *.dpl 状态文件中直接读取 playname 字段。
+    /// 这是支持跨目录切换后仍能保存完整当前路径的关键实现。
+    /// </summary>
     private static bool TryResolvePotPlayerCurrentMediaFromStateFiles(
         string processName,
         List<string> titleCandidates,
@@ -233,6 +296,9 @@ public class Saver {
         return true;
     }
 
+    /// <summary>
+    /// 当多个状态文件得分相同，只有它们指向同一路径时才认定结果唯一。
+    /// </summary>
     private static PotPlayerPlaylistState? TryResolveUniqueStateByPath(List<PotPlayerPlaylistState> states) {
         List<string> paths = states
             .Select(item => item.CurrentMediaPath)
@@ -249,6 +315,9 @@ public class Saver {
             .First();
     }
 
+    /// <summary>
+    /// 枚举 PotPlayer 在 AppData 下维护的播放状态文件。
+    /// </summary>
     private static IEnumerable<PotPlayerPlaylistState> ReadPotPlayerPlaylistStates(string processName) {
         string appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
         List<string> playlistDirectories = new();
@@ -285,6 +354,9 @@ public class Saver {
         }
     }
 
+    /// <summary>
+    /// 从 DPL 文件中读取 playname 字段，即当前播放文件的完整路径。
+    /// </summary>
     private static string? ReadDplPlayname(string playlistFilePath) {
         try {
             foreach (string rawLine in File.ReadLines(playlistFilePath)) {
@@ -303,6 +375,9 @@ public class Saver {
         return null;
     }
 
+    /// <summary>
+    /// 批量对候选媒体路径进行标题匹配评分。
+    /// </summary>
     private static List<(string Path, int Score)> ScoreCandidates(IEnumerable<string> candidates, IEnumerable<string> titleCandidates) {
         List<string> titleCandidateList = titleCandidates
             .Where(item => !string.IsNullOrWhiteSpace(item))
@@ -321,6 +396,9 @@ public class Saver {
             .ToList();
     }
 
+    /// <summary>
+    /// 从评分结果中挑选唯一且达标的最佳候选路径。
+    /// </summary>
     private static bool TryPickBestCandidate(
         List<(string Path, int Score)> scoredCandidates,
         int minScore,
@@ -355,6 +433,9 @@ public class Saver {
         return true;
     }
 
+    /// <summary>
+    /// 当命令行只有一个初始媒体文件时，扫描同目录媒体文件做兜底匹配。
+    /// </summary>
     private static bool TryResolveFromSiblingFiles(
         string primaryCandidate,
         List<string> titleCandidates,
@@ -404,6 +485,10 @@ public class Saver {
         return false;
     }
 
+    /// <summary>
+    /// 从 PotPlayer 原始命令行中提取媒体候选。
+    /// 支持直接媒体文件和播放列表文件两种形式。
+    /// </summary>
     private static List<string> CollectPotPlayerMediaCandidates(string originalCommandLine) {
         List<string> arguments = CommandLineUtils.ParseArguments(originalCommandLine);
         HashSet<string> candidates = new(StringComparer.OrdinalIgnoreCase);
@@ -430,6 +515,9 @@ public class Saver {
         return candidates.ToList();
     }
 
+    /// <summary>
+    /// 基于窗口标题构造多个可比较的标题候选，以提升匹配容错率。
+    /// </summary>
     private static List<string> BuildPotPlayerTitleCandidates(string windowTitle) {
         HashSet<string> candidates = new(StringComparer.OrdinalIgnoreCase);
         string baseTitle = StripPotPlayerSuffix(windowTitle);
@@ -453,6 +541,9 @@ public class Saver {
         return candidates.ToList();
     }
 
+    /// <summary>
+    /// 对标题片段做轻量清洗后加入候选集合。
+    /// </summary>
     private static void AddTitleCandidate(ISet<string> candidates, string value) {
         string normalized = value.Trim().Trim('"', '\'', '-', '_', '·', '•');
         if (!string.IsNullOrWhiteSpace(normalized)) {
@@ -460,6 +551,9 @@ public class Saver {
         }
     }
 
+    /// <summary>
+    /// 去掉 PotPlayer 窗口标题尾部的播放器后缀，只保留媒体标题主体。
+    /// </summary>
     private static string StripPotPlayerSuffix(string windowTitle) {
         string title = windowTitle?.Trim() ?? string.Empty;
         if (string.IsNullOrWhiteSpace(title)) {
@@ -483,6 +577,9 @@ public class Saver {
         return title;
     }
 
+    /// <summary>
+    /// 去掉标题开头的元信息。
+    /// </summary>
     private static string RemoveLeadingMetadata(string title) {
         string result = title.Trim();
         while (LeadingBracketMetadataRegex.IsMatch(result)) {
@@ -492,6 +589,9 @@ public class Saver {
         return result;
     }
 
+    /// <summary>
+    /// 去掉标题结尾的元信息。
+    /// </summary>
     private static string RemoveTrailingMetadata(string title) {
         string result = title.Trim();
         while (TrailingBracketMetadataRegex.IsMatch(result)) {
@@ -501,6 +601,9 @@ public class Saver {
         return result;
     }
 
+    /// <summary>
+    /// 去掉标题里的常见画质、编码和播放时间等噪声文本。
+    /// </summary>
     private static string RemoveKnownNoise(string title) {
         string result = title.Trim();
         result = ResolutionNoiseRegex.Replace(result, string.Empty).Trim();
@@ -508,6 +611,10 @@ public class Saver {
         return result;
     }
 
+    /// <summary>
+    /// 计算标题候选与文件路径之间的相似度分数。
+    /// 分数越高，越可能是当前真实播放文件。
+    /// </summary>
     private static int CalculateMatchScore(string titleCandidate, string path) {
         string normalizedTitle = NormalizeForComparison(titleCandidate);
         string normalizedFileName = NormalizeForComparison(Path.GetFileName(path));
@@ -550,6 +657,9 @@ public class Saver {
         return 0;
     }
 
+    /// <summary>
+    /// 计算两个字符串的公共前缀长度，作为较弱的相似度信号。
+    /// </summary>
     private static int GetCommonPrefixLength(string left, string right) {
         int length = Math.Min(left.Length, right.Length);
         int index = 0;
@@ -560,6 +670,9 @@ public class Saver {
         return index;
     }
 
+    /// <summary>
+    /// 将候选路径标准化后加入集合，避免重复和无效路径。
+    /// </summary>
     private static void AddCandidatePath(ISet<string> candidates, string candidatePath, string? baseDirectory = null) {
         string? normalizedPath = TryNormalizeCandidatePath(candidatePath, baseDirectory);
         if (!string.IsNullOrWhiteSpace(normalizedPath)) {
@@ -567,6 +680,9 @@ public class Saver {
         }
     }
 
+    /// <summary>
+    /// 规范化候选路径：去掉引号、处理相对路径并过滤网络地址。
+    /// </summary>
     private static string? TryNormalizeCandidatePath(string candidatePath, string? baseDirectory = null) {
         string normalizedPath = candidatePath.Trim().Trim('"');
         if (string.IsNullOrWhiteSpace(normalizedPath)) {
@@ -591,6 +707,9 @@ public class Saver {
         }
     }
 
+    /// <summary>
+    /// 轻量读取播放列表文件中的媒体项。
+    /// </summary>
     private static IEnumerable<string> ReadPlaylistEntries(string playlistPath) {
         string? normalizedPlaylistPath = TryNormalizeCandidatePath(playlistPath);
         if (string.IsNullOrWhiteSpace(normalizedPlaylistPath) || !File.Exists(normalizedPlaylistPath)) {
@@ -623,11 +742,17 @@ public class Saver {
         }
     }
 
+    /// <summary>
+    /// 判断路径是否为播放列表文件。
+    /// </summary>
     private static bool IsPlaylistFile(string path) {
         string extension = Path.GetExtension(path.Trim().Trim('"'));
         return PlaylistExtensions.Contains(extension);
     }
 
+    /// <summary>
+    /// 判断一个参数是否像媒体文件路径，只接受已知媒体扩展名。
+    /// </summary>
     private static bool LooksLikeMediaPath(string token) {
         string candidate = token.Trim().Trim('"');
         if (string.IsNullOrWhiteSpace(candidate)) {
@@ -638,10 +763,16 @@ public class Saver {
         return !string.IsNullOrWhiteSpace(extension) && MediaExtensions.Contains(extension);
     }
 
+    /// <summary>
+    /// 判断一个参数是否为命令行选项。
+    /// </summary>
     private static bool IsOptionToken(string token) {
         return token.StartsWith('-') || token.StartsWith("/");
     }
 
+    /// <summary>
+    /// 将文本归一化为便于比较的形式：小写、去变音符号、仅保留主要字符。
+    /// </summary>
     private static string NormalizeForComparison(string? value) {
         if (string.IsNullOrWhiteSpace(value)) {
             return string.Empty;
@@ -664,6 +795,9 @@ public class Saver {
         return builder.ToString();
     }
 
+    /// <summary>
+    /// 获取进程主程序完整路径，优先走 MainModule，失败时回退到 Win32 API。
+    /// </summary>
     private static string GetProcessFilePath(Process process) {
         try {
             return process.MainModule?.FileName ?? string.Empty;
@@ -680,6 +814,9 @@ public class Saver {
         }
     }
 
+    /// <summary>
+    /// 通过 WMI 查询进程完整命令行。
+    /// </summary>
     private static string GetCommandLineArgs(Process process) {
         try {
             using System.Management.ManagementObjectSearcher searcher =
@@ -695,6 +832,8 @@ public class Saver {
         return string.Empty;
     }
 }
+
+
 
 
 
