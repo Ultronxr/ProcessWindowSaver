@@ -1,4 +1,5 @@
 .idea/
+.dotnet-cli/
 bin/
 obj/
 *.DotSettings.user
