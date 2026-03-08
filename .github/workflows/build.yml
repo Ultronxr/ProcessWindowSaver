@@ -58,7 +58,7 @@ jobs:
         shell: pwsh
         run: |
           $tag = '${{ github.ref_name }}'
-          $exePath = "bin/Release/net10.0-windows/publish/ProcessWindowSaver-$tag.exe"
+          $exePath = "bin/Release/net10.0-windows/win-x64/publish/ProcessWindowSaver-$tag.exe"
           if (-not (Test-Path $exePath)) {
             throw "Versioned executable not found: $exePath"
           }
@@ -68,5 +68,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ProcessWindowSaver-${{ github.ref_name }}
-          path: bin/Release/net10.0-windows/publish/
+          path: bin/Release/net10.0-windows/win-x64/publish/
           if-no-files-found: error
